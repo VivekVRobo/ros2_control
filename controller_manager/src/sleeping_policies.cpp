@@ -14,8 +14,10 @@
 
 #include "controller_manager/sleeping_policies.hpp"
 
+namespace controller_manager
+{
 rclcpp::JumpHandler::SharedPtr register_sim_time_jump_handler(
-  const std::shared_ptr<controller_manager::ControllerManager> & cm)
+  const std::shared_ptr<ControllerManager> & cm)
 {
   rcl_jump_threshold_t jump_threshold{};
   jump_threshold.min_backward.nanoseconds = -1;
@@ -25,6 +27,7 @@ rclcpp::JumpHandler::SharedPtr register_sim_time_jump_handler(
     [trigger_clock](const rcl_time_jump_t &) { trigger_clock->cancel_sleep_or_wait(); },
     jump_threshold);
 }
+}  // namespace controller_manager
 
 
 bool sleep_for_sim_time(
