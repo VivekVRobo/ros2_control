@@ -66,6 +66,7 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gmock REQUIRED)
   find_package(ros2_control_test_assets REQUIRED)
   find_package(example_interfaces REQUIRED)
+  find_package(rosgraph_msgs REQUIRED)
 
   option(ROS2_CONTROL_STRICT_TIMING_TESTS
     "Use strict timing-sensitive assertions in ros2_control tests. Turn ON for RT-capable local validation."
@@ -297,6 +298,7 @@ if(BUILD_TESTING)
   target_link_libraries(test_sleeping_policies
     controller_manager
     ros2_control_test_assets::ros2_control_test_assets
+    ${rosgraph_msgs_TARGETS}
   )
 
   find_package(ament_cmake_pytest REQUIRED)
