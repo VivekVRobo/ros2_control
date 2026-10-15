@@ -38,10 +38,10 @@ struct ControlLoopState
   std::chrono::nanoseconds period{0};
   rclcpp::Time cycle_end_time;  //< The time when work was done in the current cycle.
 };
-}  // namespace controller_manager
 
 rclcpp::JumpHandler::SharedPtr register_sim_time_jump_handler(
-  const std::shared_ptr<controller_manager::ControllerManager> & cm);
+  const std::shared_ptr<ControllerManager> & cm);
+}  // namespace controller_manager
 
 bool sleep_for_sim_time(
   std::shared_ptr<controller_manager::ControllerManager> cm,
