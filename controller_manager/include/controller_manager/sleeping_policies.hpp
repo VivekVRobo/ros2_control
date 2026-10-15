@@ -16,6 +16,7 @@
 
 #include <memory>
 
+#include <rclcpp/clock.hpp>
 #include <rclcpp/logging.hpp>
 
 #include "controller_manager/controller_manager.hpp"
@@ -38,6 +39,9 @@ struct ControlLoopState
   rclcpp::Time cycle_end_time;  //< The time when work was done in the current cycle.
 };
 }  // namespace controller_manager
+
+rclcpp::JumpHandler::SharedPtr register_sim_time_jump_handler(
+  const std::shared_ptr<controller_manager::ControllerManager> & cm);
 
 bool sleep_for_sim_time(
   std::shared_ptr<controller_manager::ControllerManager> cm,
