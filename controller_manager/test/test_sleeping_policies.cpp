@@ -258,13 +258,7 @@ TEST_F(SimTimeSleepingPoliciesTest, backward_clock_jump_interrupts_pending_sim_t
   state.period = 10s;
   state.previous_time = cm_->get_trigger_clock()->now();
 
-  rcl_jump_threshold_t jump_threshold{};
-  jump_threshold.min_backward.nanoseconds = -1;
-  auto trigger_clock = cm_->get_trigger_clock();
-  auto jump_handler = trigger_clock->create_jump_callback(
-    nullptr,
-    [trigger_clock](const rcl_time_jump_t &) { trigger_clock->cancel_sleep_or_wait(); },
-    jump_threshold);
+  auto jump_handler = register_sim_time_jump_handler(cm_);
 
   auto sleep_future = std::async(
     std::launch::async, [&]() { return sleep_for_sim_time(cm_, state); });
