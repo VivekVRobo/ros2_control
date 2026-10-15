@@ -14,6 +14,19 @@
 
 #include "controller_manager/sleeping_policies.hpp"
 
+rclcpp::JumpHandler::SharedPtr register_sim_time_jump_handler(
+  const std::shared_ptr<controller_manager::ControllerManager> & cm)
+{
+  rcl_jump_threshold_t jump_threshold{};
+  jump_threshold.min_backward.nanoseconds = -1;
+  auto trigger_clock = cm->get_trigger_clock();
+  return trigger_clock->create_jump_callback(
+    nullptr,
+    [trigger_clock](const rcl_time_jump_t &) { trigger_clock->cancel_sleep_or_wait(); },
+    jump_threshold);
+}
+
+
 bool sleep_for_sim_time(
   std::shared_ptr<controller_manager::ControllerManager> cm,
   controller_manager::ControlLoopState & state)
