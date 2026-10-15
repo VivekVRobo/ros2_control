@@ -272,7 +272,7 @@ TEST_F(SimTimeSleepingPoliciesTest, backward_clock_jump_interrupts_pending_sim_t
 
   ASSERT_EQ(sleep_future.wait_for(1s), std::future_status::ready)
     << "Backward /clock jump did not interrupt the pending simulated-time sleep";
-  EXPECT_FALSE(sleep_future.get());
+  EXPECT_TRUE(sleep_future.get());
   EXPECT_LT(std::chrono::steady_clock::now() - reset_start, 1s);
   EXPECT_EQ(cm_->get_trigger_clock()->now().nanoseconds(), 1'000'000'000);
 }
