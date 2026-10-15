@@ -258,7 +258,7 @@ TEST_F(SimTimeSleepingPoliciesTest, backward_clock_jump_interrupts_pending_sim_t
   state.period = 10s;
   state.previous_time = cm_->get_trigger_clock()->now();
 
-  auto jump_handler = register_sim_time_jump_handler(cm_);
+  auto jump_handler = controller_manager::register_sim_time_jump_handler(cm_);
 
   auto sleep_future = std::async(
     std::launch::async, [&]() { return sleep_for_sim_time(cm_, state); });
