@@ -139,13 +139,7 @@ int main(int argc, char ** argv)
       rclcpp::JumpHandler::SharedPtr clock_jump_handler;
       if (timing_config.use_sim_time)
       {
-        rcl_jump_threshold_t jump_threshold{};
-        jump_threshold.min_backward.nanoseconds = -1;
-        auto trigger_clock = cm->get_trigger_clock();
-        clock_jump_handler = trigger_clock->create_jump_callback(
-          nullptr,
-          [trigger_clock](const rcl_time_jump_t &) { trigger_clock->cancel_sleep_or_wait(); },
-          jump_threshold);
+        clock_jump_handler = controller_manager::register_sim_time_jump_handler(cm);
       }
 
       // wait for the clock to be available
