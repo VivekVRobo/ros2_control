@@ -22,6 +22,7 @@
 
 #include "controller_manager/controller_manager.hpp"
 #include "controller_manager/sleeping_policies.hpp"
+#include "rclcpp/clock.hpp"
 #include "rclcpp/executors/multi_threaded_executor.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/parameter.hpp"
@@ -136,6 +137,14 @@ int main(int argc, char ** argv)
           thread_priority);
       }
 
+      // A backward ROS-time jump must interrupt sleep_until(), which otherwise keeps
+      // waiting for a deadline from the previous simulation timeline.
+      [[maybe_unused]] rclcpp::JumpHandler::SharedPtr clock_jump_handler;
+      if (timing_config.use_sim_time)
+      {
+        clock_jump_handler = controller_manager::register_sim_time_jump_handler(cm);
+      }
+
       // wait for the clock to be available
       cm->get_clock()->wait_until_started();
       cm->get_clock()->sleep_for(rclcpp::Duration::from_seconds(1.0 / cm->get_update_rate()));
@@ -149,7 +158,16 @@ int main(int argc, char ** argv)
       {
         // calculate measured period
         auto const current_time = cm->get_trigger_clock()->now();
-        auto const measured_period = current_time - state.previous_time;
+        auto measured_period = current_time - state.previous_time;
+        if (measured_period.nanoseconds() < 0)
+        {
+          // Simulation time moved backwards. Rebase the loop instead of passing a negative
+          // period to hardware and controllers on the first cycle after the reset.
+          RCLCPP_WARN(
+            cm->get_logger(),
+            "Detected a backward time jump. Rebasing controller loop timing.");
+          measured_period = rclcpp::Duration(0, 0);
+        }
         state.previous_time = current_time;
 
         // execute update loop
