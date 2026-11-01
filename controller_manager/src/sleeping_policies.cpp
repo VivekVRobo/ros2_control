@@ -23,6 +23,21 @@
 #include "controller_manager/controller_manager.hpp"
 #include "rclcpp/logging.hpp"
 
+namespace controller_manager
+{
+rclcpp::JumpHandler::SharedPtr register_sim_time_jump_handler(
+  const std::shared_ptr<ControllerManager> & cm)
+{
+  rcl_jump_threshold_t jump_threshold{};
+  jump_threshold.min_backward.nanoseconds = -1;
+  auto clock = cm->get_clock();
+  return clock->create_jump_callback(
+    nullptr,
+    [clock](const rcl_time_jump_t &) { clock->cancel_sleep_or_wait(); },
+    jump_threshold);
+}
+}  // namespace controller_manager
+
 bool sleep_for_sim_time(
   std::shared_ptr<controller_manager::ControllerManager> cm,
   controller_manager::ControlLoopState & state)
