@@ -17,11 +17,15 @@
 #include <chrono>
 #include <memory>
 
+#include "rclcpp/clock.hpp"
 #include "rclcpp/time.hpp"
 
 namespace controller_manager
 {
 class ControllerManager;
+
+rclcpp::JumpHandler::SharedPtr register_sim_time_jump_handler(
+  const std::shared_ptr<ControllerManager> & cm);
 
 struct ControlLoopTimingConfig
 {
