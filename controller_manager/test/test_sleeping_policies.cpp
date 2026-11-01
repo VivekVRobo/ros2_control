@@ -14,7 +14,11 @@
 
 #include <chrono>
 #include <future>
+#include <memory>
 #include <thread>
+
+#include "rosgraph_msgs/msg/clock.hpp"
+#include "rclcpp/clock.hpp"
 
 #include "controller_manager/sleeping_policies.hpp"
 #include "controller_manager_test_common.hpp"
@@ -177,3 +181,108 @@ TEST_F(SleepingPoliciesTest, sleep_for_sim_time_returns_false_when_clock_types_m
 
   EXPECT_FALSE(sleep_for_sim_time(cm_, state));
 }
+
+class SimTimeSleepingPoliciesTest
+: public ControllerManagerFixture<controller_manager::ControllerManager>
+{
+public:
+  SimTimeSleepingPoliciesTest()
+  : ControllerManagerFixture(
+      ros2_control_test_assets::minimal_robot_urdf, "",
+      {rclcpp::Parameter("update_rate", kUpdateRateHz),
+       rclcpp::Parameter("use_sim_time", true)})
+  {
+  }
+
+protected:
+  void SetUp() override
+  {
+    ControllerManagerFixture::SetUp();
+    pass_robot_description_to_cm_and_rm();
+    clock_publisher_node_ = std::make_shared<rclcpp::Node>("clock_publisher");
+    clock_publisher_ =
+      clock_publisher_node_->create_publisher<rosgraph_msgs::msg::Clock>("/clock", rclcpp::ClockQoS());
+    executor_->add_node(cm_);
+    executor_->add_node(clock_publisher_node_);
+    executor_spin_future_ = std::async(std::launch::async, [this]() { executor_->spin(); });
+    ASSERT_TRUE(wait_for_clock(0ns));
+  }
+
+  void TearDown() override
+  {
+    executor_->cancel();
+    if (executor_spin_future_.valid())
+    {
+      executor_spin_future_.wait();
+    }
+    executor_->remove_node(cm_->get_node_base_interface());
+    executor_->remove_node(clock_publisher_node_->get_node_base_interface());
+    ControllerManagerFixture::TearDown();
+  }
+
+  void publish_clock(std::chrono::nanoseconds time)
+  {
+    rosgraph_msgs::msg::Clock msg;
+    msg.clock.sec = static_cast<int32_t>(time.count() / 1'000'000'000);
+    msg.clock.nanosec = static_cast<uint32_t>(time.count() % 1'000'000'000);
+    clock_publisher_->publish(msg);
+  }
+
+  bool wait_for_clock(std::chrono::nanoseconds expected)
+  {
+    const auto deadline = std::chrono::steady_clock::now() + 1s;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+      publish_clock(expected);
+      if (cm_->get_clock()->now().nanoseconds() == expected.count())
+      {
+        return true;
+      }
+      std::this_thread::sleep_for(10ms);
+    }
+    return false;
+  }
+
+  rclcpp::Node::SharedPtr clock_publisher_node_;
+  rclcpp::Publisher<rosgraph_msgs::msg::Clock>::SharedPtr clock_publisher_;
+  std::future<void> executor_spin_future_;
+};
+
+TEST_F(SimTimeSleepingPoliciesTest, backward_clock_jump_interrupts_pending_sim_time_sleep)
+{
+  ASSERT_TRUE(wait_for_clock(10s));
+  ASSERT_TRUE(cm_->get_clock()->started());
+
+  controller_manager::ControlLoopState state;
+  state.period = 10s;
+  state.previous_time = cm_->get_trigger_clock()->now();
+
+  [[maybe_unused]] auto jump_handler = controller_manager::register_sim_time_jump_handler(cm_);
+
+  auto sleep_future = std::async(
+    std::launch::async, [&]() { return sleep_for_sim_time(cm_, state); });
+
+  // Let the worker enter sleep_until() before rewinding simulated time.
+  std::this_thread::sleep_for(50ms);
+  ASSERT_TRUE(wait_for_clock(11s));
+
+  const auto reset_start = std::chrono::steady_clock::now();
+  ASSERT_TRUE(wait_for_clock(1s));
+
+  const bool interrupted = sleep_future.wait_for(1s) == std::future_status::ready;
+  if (!interrupted)
+  {
+    // Advance to the original deadline so a failing regression test cannot hang on future teardown.
+    EXPECT_TRUE(wait_for_clock(20s));
+    EXPECT_EQ(sleep_future.wait_for(1s), std::future_status::ready);
+  }
+  EXPECT_TRUE(interrupted)
+    << "Backward /clock jump did not interrupt the pending simulated-time sleep";
+  if (sleep_future.wait_for(0s) == std::future_status::ready)
+  {
+    EXPECT_TRUE(sleep_future.get());
+  }
+  EXPECT_LT(std::chrono::steady_clock::now() - reset_start, 2s);
+  EXPECT_EQ(cm_->get_trigger_clock()->now().nanoseconds(), 1'000'000'000);
+}
+
