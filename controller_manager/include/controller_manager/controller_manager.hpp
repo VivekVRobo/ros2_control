@@ -20,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -448,7 +449,8 @@ private:
    */
   controller_interface::return_type check_following_controllers_for_activate(
     const std::vector<ControllerSpec> & controllers, int strictness,
-    const ControllersListIterator controller_it, std::string & message);
+    const ControllersListIterator controller_it, std::string & message,
+    std::unordered_set<std::string> & visited_controllers);
 
   /// Check if all the preceding controllers will be in inactive state after controllers' switch.
   /**
@@ -660,9 +662,9 @@ private:
 
     std::vector<ControllerSpec> controllers_lists_[2];
     /// The index of the controller list with the most updated information
-    int updated_controllers_index_ = 0;
+    std::atomic<int> updated_controllers_index_{0};
     /// The index of the controllers list being used in the real-time thread.
-    int used_by_realtime_controllers_index_ = -1;
+    std::atomic<int> used_by_realtime_controllers_index_{-1};
     /// The callback to be called when the list is switched
     std::function<void()> on_switch_callback_ = nullptr;
   };
