@@ -2079,8 +2079,9 @@ controller_interface::return_type ControllerManager::switch_controller_cb(
     }
     else
     {
-      status =
-        check_following_controllers_for_activate(controllers, strictness, controller_it, message);
+      std::unordered_set<std::string> visited_controllers;
+      status = check_following_controllers_for_activate(
+        controllers, strictness, controller_it, message, visited_controllers);
     }
 
     if (status == controller_interface::return_type::OK)
@@ -3713,8 +3714,8 @@ void ControllerManager::write(const rclcpp::Time & time, const rclcpp::Duration 
 std::vector<ControllerSpec> &
 ControllerManager::RTControllerListWrapper::update_and_get_used_by_rt_list()
 {
-  used_by_realtime_controllers_index_ = updated_controllers_index_;
-  return controllers_lists_[used_by_realtime_controllers_index_];
+  used_by_realtime_controllers_index_.store(updated_controllers_index_.load());
+  return controllers_lists_[used_by_realtime_controllers_index_.load()];
 }
 
 std::vector<ControllerSpec> & ControllerManager::RTControllerListWrapper::get_unused_list(
@@ -3726,7 +3727,7 @@ std::vector<ControllerSpec> & ControllerManager::RTControllerListWrapper::get_un
   }
   controllers_lock_.unlock();
   // Get the index to the outdated controller list
-  int free_controllers_list = get_other_list(updated_controllers_index_);
+  int free_controllers_list = get_other_list(updated_controllers_index_.load());
 
   // Wait until the outdated controller list is not being used by the realtime thread
   wait_until_rt_not_using(free_controllers_list);
@@ -3741,7 +3742,7 @@ const std::vector<ControllerSpec> & ControllerManager::RTControllerListWrapper::
     throw std::runtime_error("controllers_lock_ not owned by thread");
   }
   controllers_lock_.unlock();
-  return controllers_lists_[updated_controllers_index_];
+  return controllers_lists_[updated_controllers_index_.load()];
 }
 
 void ControllerManager::RTControllerListWrapper::switch_updated_list(
@@ -3752,8 +3753,8 @@ void ControllerManager::RTControllerListWrapper::switch_updated_list(
     throw std::runtime_error("controllers_lock_ not owned by thread");
   }
   controllers_lock_.unlock();
-  int former_current_controllers_list_ = updated_controllers_index_;
-  updated_controllers_index_ = get_other_list(former_current_controllers_list_);
+  int former_current_controllers_list_ = updated_controllers_index_.load();
+  updated_controllers_index_.store(get_other_list(former_current_controllers_list_));
   wait_until_rt_not_using(former_current_controllers_list_);
   if (on_switch_callback_)
   {
@@ -3776,7 +3777,7 @@ int ControllerManager::RTControllerListWrapper::get_other_list(int index) const
 void ControllerManager::RTControllerListWrapper::wait_until_rt_not_using(
   int index, std::chrono::microseconds sleep_period) const
 {
-  while (used_by_realtime_controllers_index_ == index)
+  while (used_by_realtime_controllers_index_.load() == index)
   {
     if (!rclcpp::ok())
     {
@@ -3884,9 +3885,15 @@ void ControllerManager::propagate_deactivation_of_chained_mode(
 
 controller_interface::return_type ControllerManager::check_following_controllers_for_activate(
   const std::vector<ControllerSpec> & controllers, int strictness,
-  const ControllersListIterator controller_it, std::string & message)
+  const ControllersListIterator controller_it, std::string & message,
+  std::unordered_set<std::string> & visited_controllers)
 {
   // we assume that the controller exists is checked in advance
+  if (!visited_controllers.insert(controller_it->info.name).second)
+  {
+    return controller_interface::return_type::OK;
+  }
+
   RCLCPP_DEBUG(
     get_logger(), "Checking following controllers of preceding controller with name '%s'.",
     controller_it->info.name.c_str());
@@ -3982,7 +3989,7 @@ controller_interface::return_type ControllerManager::check_following_controllers
     // controller update chained mode requests
     if (
       check_following_controllers_for_activate(
-        controllers, strictness, following_ctrl_it, message) ==
+        controllers, strictness, following_ctrl_it, message, visited_controllers) ==
       controller_interface::return_type::ERROR)
     {
       return controller_interface::return_type::ERROR;
