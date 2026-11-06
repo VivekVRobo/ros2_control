@@ -2085,6 +2085,77 @@ TEST_F(
 
 TEST_F(
   TestControllerManagerFallbackControllers,
+  test_chainable_controllers_activation_cycle_does_not_recurse)
+{
+  const auto strictness = controller_manager_msgs::srv::SwitchController::Request::STRICT;
+  controller_interface::InterfaceConfiguration cmd_itfs_cfg;
+  controller_interface::InterfaceConfiguration state_itfs_cfg;
+  cmd_itfs_cfg.type = controller_interface::interface_configuration_type::INDIVIDUAL;
+  state_itfs_cfg.type = controller_interface::interface_configuration_type::INDIVIDUAL;
+
+  const std::string controller_a_name = "test_chainable_controller_a";
+  const std::string controller_b_name = "test_chainable_controller_b";
+
+  auto controller_a = std::make_shared<test_chainable_controller::TestChainableController>();
+  cmd_itfs_cfg.names = {controller_b_name + "/modified_joint1/position"};
+  state_itfs_cfg.names = {controller_b_name + "/modified_joint2/velocity"};
+  controller_a->set_command_interface_configuration(cmd_itfs_cfg);
+  controller_a->set_state_interface_configuration(state_itfs_cfg);
+  controller_a->set_reference_interface_names({"modified_joint1/position"});
+  controller_a->set_exported_state_interface_names({"modified_joint2/velocity"});
+
+  auto controller_b = std::make_shared<test_chainable_controller::TestChainableController>();
+  cmd_itfs_cfg.names = {controller_a_name + "/modified_joint2/velocity"};
+  state_itfs_cfg.names = {controller_a_name + "/modified_joint1/position"};
+  controller_b->set_command_interface_configuration(cmd_itfs_cfg);
+  controller_b->set_state_interface_configuration(state_itfs_cfg);
+  controller_b->set_reference_interface_names({"modified_joint2/velocity"});
+  controller_b->set_exported_state_interface_names({"modified_joint1/position"});
+
+  {
+    ControllerManagerRunner cm_runner(this);
+    cm_->add_controller(
+      controller_a, controller_a_name, test_chainable_controller::TEST_CONTROLLER_CLASS_NAME);
+    cm_->add_controller(
+      controller_b, controller_b_name, test_chainable_controller::TEST_CONTROLLER_CLASS_NAME);
+  }
+
+  EXPECT_EQ(
+    controller_interface::return_type::OK,
+    cm_->update(time_, rclcpp::Duration::from_seconds(0.01)));
+
+  {
+    ControllerManagerRunner cm_runner(this);
+    ASSERT_EQ(controller_interface::return_type::OK, cm_->configure_controller(controller_a_name));
+    ASSERT_EQ(controller_interface::return_type::OK, cm_->configure_controller(controller_b_name));
+  }
+
+  const std::vector<std::string> start_controllers = {controller_a_name, controller_b_name};
+  const std::vector<std::string> stop_controllers = {};
+  auto switch_future = std::async(
+    std::launch::async, &controller_manager::ControllerManager::switch_controller, cm_,
+    start_controllers, stop_controllers, strictness, true, rclcpp::Duration(0, 0));
+
+  ASSERT_EQ(std::future_status::timeout, switch_future.wait_for(std::chrono::milliseconds(100)))
+    << "switch_controller should be blocking until next update cycle";
+  EXPECT_EQ(
+    controller_interface::return_type::OK,
+    cm_->update(time_, rclcpp::Duration::from_seconds(0.01)));
+  {
+    ControllerManagerRunner cm_runner(this);
+    EXPECT_EQ(controller_interface::return_type::OK, switch_future.get());
+  }
+
+  EXPECT_EQ(
+    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE,
+    controller_a->get_lifecycle_state().id());
+  EXPECT_EQ(
+    lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE,
+    controller_b->get_lifecycle_state().id());
+}
+
+TEST_F(
+  TestControllerManagerFallbackControllers,
   test_fallback_controllers_with_chainable_controllers_other_failing_checks)
 {
   const std::string test_controller_1_name = "test_controller_1";
