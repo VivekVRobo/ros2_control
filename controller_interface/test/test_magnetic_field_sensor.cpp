@@ -14,7 +14,9 @@
 
 #include "test_magnetic_field_sensor.hpp"
 
+#include <cmath>
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 #include "sensor_msgs/msg/magnetic_field.hpp"
@@ -79,4 +81,72 @@ TEST_F(MagneticFieldSensorTest, validate_all)
 
   // validate the count of state_interfaces_
   ASSERT_EQ(magnetic_field_sensor_->state_interfaces_.size(), 0u);
+
+TEST_F(MagneticFieldSensorTest, UsesNaNWhenAllAxesAreUnavailable)
+{
+  magnetic_field_sensor_ = std::make_unique<TestableMagneticFieldSensor>(sensor_name_);
+
+  auto magnetic_field_x = std::make_shared<hardware_interface::StateInterface>(
+    sensor_name_, magnetic_field_interface_names_[0], &magnetic_field_values_[0]);
+  auto magnetic_field_y = std::make_shared<hardware_interface::StateInterface>(
+    sensor_name_, magnetic_field_interface_names_[1], &magnetic_field_values_[1]);
+  auto magnetic_field_z = std::make_shared<hardware_interface::StateInterface>(
+    sensor_name_, magnetic_field_interface_names_[2], &magnetic_field_values_[2]);
+
+  std::vector<hardware_interface::LoanedStateInterface> state_interfaces;
+  state_interfaces.emplace_back(magnetic_field_x);
+  state_interfaces.emplace_back(magnetic_field_y);
+  state_interfaces.emplace_back(magnetic_field_z);
+  magnetic_field_sensor_->assign_loaned_state_interfaces(state_interfaces);
+
+  std::shared_lock<std::shared_mutex> lock_x(magnetic_field_x->get_mutex());
+  std::shared_lock<std::shared_mutex> lock_y(magnetic_field_y->get_mutex());
+  std::shared_lock<std::shared_mutex> lock_z(magnetic_field_z->get_mutex());
+
+  sensor_msgs::msg::MagneticField message;
+  ASSERT_TRUE(magnetic_field_sensor_->get_values_as_message(message));
+  EXPECT_TRUE(std::isnan(message.magnetic_field.x));
+  EXPECT_TRUE(std::isnan(message.magnetic_field.y));
+  EXPECT_TRUE(std::isnan(message.magnetic_field.z));
+
+  magnetic_field_sensor_->release_interfaces();
+}
+
+TEST_F(MagneticFieldSensorTest, UsesNaNOnlyForUnavailableAxes)
+{
+  magnetic_field_sensor_ = std::make_unique<TestableMagneticFieldSensor>(sensor_name_);
+
+  auto magnetic_field_x = std::make_shared<hardware_interface::StateInterface>(
+    sensor_name_, magnetic_field_interface_names_[0], &magnetic_field_values_[0]);
+  auto magnetic_field_y = std::make_shared<hardware_interface::StateInterface>(
+    sensor_name_, magnetic_field_interface_names_[1], &magnetic_field_values_[1]);
+  auto magnetic_field_z = std::make_shared<hardware_interface::StateInterface>(
+    sensor_name_, magnetic_field_interface_names_[2], &magnetic_field_values_[2]);
+
+  std::vector<hardware_interface::LoanedStateInterface> state_interfaces;
+  state_interfaces.emplace_back(magnetic_field_x);
+  state_interfaces.emplace_back(magnetic_field_y);
+  state_interfaces.emplace_back(magnetic_field_z);
+  magnetic_field_sensor_->assign_loaned_state_interfaces(state_interfaces);
+
+  sensor_msgs::msg::MagneticField first_message;
+  ASSERT_TRUE(magnetic_field_sensor_->get_values_as_message(first_message));
+  EXPECT_EQ(first_message.magnetic_field.x, magnetic_field_values_[0]);
+  EXPECT_EQ(first_message.magnetic_field.y, magnetic_field_values_[1]);
+  EXPECT_EQ(first_message.magnetic_field.z, magnetic_field_values_[2]);
+
+  magnetic_field_values_[0] = 10.0;
+  magnetic_field_values_[2] = 30.0;
+
+  std::shared_lock<std::shared_mutex> lock_y(magnetic_field_y->get_mutex());
+
+  sensor_msgs::msg::MagneticField second_message;
+  ASSERT_TRUE(magnetic_field_sensor_->get_values_as_message(second_message));
+  EXPECT_EQ(second_message.magnetic_field.x, 10.0);
+  EXPECT_TRUE(std::isnan(second_message.magnetic_field.y));
+  EXPECT_EQ(second_message.magnetic_field.z, 30.0);
+
+  magnetic_field_sensor_->release_interfaces();
+}
+
 }
