@@ -81,6 +81,7 @@ TEST_F(MagneticFieldSensorTest, validate_all)
 
   // validate the count of state_interfaces_
   ASSERT_EQ(magnetic_field_sensor_->state_interfaces_.size(), 0u);
+}
 
 TEST_F(MagneticFieldSensorTest, UsesNaNWhenAllAxesAreUnavailable)
 {
