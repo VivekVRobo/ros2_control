@@ -15,6 +15,7 @@
 #ifndef SEMANTIC_COMPONENTS__MAGNETIC_FIELD_SENSOR_HPP_
 #define SEMANTIC_COMPONENTS__MAGNETIC_FIELD_SENSOR_HPP_
 
+#include <limits>
 #include <string>
 
 #include "semantic_components/semantic_component_interface.hpp"
