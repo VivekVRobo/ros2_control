@@ -148,5 +148,3 @@ TEST_F(MagneticFieldSensorTest, UsesNaNOnlyForUnavailableAxes)
 
   magnetic_field_sensor_->release_interfaces();
 }
-
-}
