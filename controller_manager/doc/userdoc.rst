@@ -7,6 +7,28 @@ Controller Manager
 Controller Manager is the main component in the ros2_control framework.
 It manages lifecycle of controllers, access to the hardware interfaces and offers services to the ROS-world.
 
+ROS 2 executor selection
+------------------------
+
+``ros2_control_node`` uses a ``MultiThreadedExecutor`` by default. On resource-constrained
+robots, an executor with fewer worker threads can reduce idle CPU overhead when the control
+workload does not require concurrent callback execution.
+
+The executor can be selected with the command-line option:
+
+.. code-block:: console
+
+    ros2_control_node --executor-type multi_threaded
+    ros2_control_node --executor-type single_threaded
+
+``multi_threaded`` preserves the existing default behavior. ``single_threaded`` uses
+``rclcpp::executors::SingleThreadedExecutor``. The option is consumed by
+``ros2_control_node`` before ROS arguments are initialized, so it can be combined with
+normal ``--ros-args`` options.
+
+The choice affects ROS callback execution only; the Controller Manager control loop remains
+on its dedicated real-time thread.
+
 ROS Interface
 -------------
 
