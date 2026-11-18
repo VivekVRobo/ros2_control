@@ -14,6 +14,8 @@
 
 #include "test_magnetic_field_sensor.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -28,6 +30,12 @@ TEST_F(MagneticFieldSensorTest, validate_all)
 
   // validate the component name
   ASSERT_EQ(magnetic_field_sensor_->name_, sensor_name_);
+
+  // Validate unavailable data is represented as NaN until a sample is available.
+  ASSERT_TRUE(
+    std::all_of(
+      magnetic_field_sensor_->data_.begin(), magnetic_field_sensor_->data_.end(),
+      [](const double value) { return std::isnan(value); }));
 
   // Validate the space reserved for interface_names_ and state_interfaces_
   // Note : Using capacity() for state_interfaces_ as no such interfaces are defined yet
@@ -77,9 +85,9 @@ TEST_F(MagneticFieldSensorTest, validate_all)
   ASSERT_EQ(temp_message.magnetic_field.y, magnetic_field_values_[1]);
   ASSERT_EQ(temp_message.magnetic_field.z, magnetic_field_values_[2]);
 
-  // release the state_interfaces_
+  // release the state_interfaces
   magnetic_field_sensor_->release_interfaces();
 
-  // validate the count of state_interfaces_
+  // validate the count of state_interfaces
   ASSERT_EQ(magnetic_field_sensor_->state_interfaces_.size(), 0u);
 }
