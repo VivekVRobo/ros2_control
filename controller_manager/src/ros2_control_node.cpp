@@ -36,10 +36,50 @@ int const kSchedPriority = 50;
 
 int main(int argc, char ** argv)
 {
-  rclcpp::init(argc, argv);
+  std::string executor_type = "multi_threaded";
+  std::vector<char *> filtered_argv;
+  filtered_argv.reserve(static_cast<size_t>(argc));
+  filtered_argv.push_back(argv[0]);
 
-  std::shared_ptr<rclcpp::Executor> executor =
-    std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+  for (int i = 1; i < argc; ++i)
+  {
+    const std::string argument = argv[i];
+    if (argument == "--executor-type")
+    {
+      if (i + 1 >= argc)
+      {
+        throw std::runtime_error("--executor-type requires a value");
+      }
+      executor_type = argv[++i];
+      continue;
+    }
+    if (argument.rfind("--executor-type=", 0) == 0)
+    {
+      executor_type = argument.substr(std::string("--executor-type=").size());
+      continue;
+    }
+    filtered_argv.push_back(argv[i]);
+  }
+
+  if (executor_type != "multi_threaded" && executor_type != "single_threaded")
+  {
+    throw std::runtime_error(
+      "Unsupported executor type '" + executor_type +
+      "'. Expected 'multi_threaded' or 'single_threaded'.");
+  }
+
+  int filtered_argc = static_cast<int>(filtered_argv.size());
+  rclcpp::init(filtered_argc, filtered_argv.data());
+
+  std::shared_ptr<rclcpp::Executor> executor;
+  if (executor_type == "single_threaded")
+  {
+    executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+  }
+  else
+  {
+    executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+  }
   std::string manager_node_name = "controller_manager";
 
   rclcpp::NodeOptions cm_node_options = controller_manager::get_cm_node_options();
