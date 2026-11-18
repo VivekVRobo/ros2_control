@@ -15,6 +15,8 @@
 #ifndef SEMANTIC_COMPONENTS__MAGNETIC_FIELD_SENSOR_HPP_
 #define SEMANTIC_COMPONENTS__MAGNETIC_FIELD_SENSOR_HPP_
 
+#include <array>
+#include <limits>
 #include <string>
 
 #include "semantic_components/semantic_component_interface.hpp"
@@ -51,25 +53,27 @@ private:
   /**
    * @brief Update the data array from the state interfaces.
    * @note This method is thread-safe and non-blocking.
-   * @note This method might return stale data if the data is not updated. This is to ensure that
-   * the data from the sensor is not discontinuous.
+   * @note An unavailable state interface is represented by NaN rather than a stale
+   * value from an earlier sample.
    */
   void update_data_from_interfaces()
   {
     for (auto i = 0u; i < data_.size(); ++i)
     {
       const auto data = state_interfaces_[i].get().get_optional();
-      if (data.has_value())
-      {
-        data_[i] = data.value();
-      }
+      data_[i] = data.value_or(std::numeric_limits<double>::quiet_NaN());
     }
   }
 
   /**
-   * @brief Array to store the data of the magnetic field sensor
+   * @brief Array to store the data of the magnetic field sensor.
+   *
+   * Unavailable interfaces are represented as NaN, matching the sensor_msgs
+   * convention for an axis that is not reported.
    */
-  std::array<double, 3> data_{{0.0, 0.0, 0.0}};
+  std::array<double, 3> data_{
+    {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(),
+     std::numeric_limits<double>::quiet_NaN()}};
 };
 
 }  // namespace semantic_components
