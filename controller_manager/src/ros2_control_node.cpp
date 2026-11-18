@@ -15,8 +15,10 @@
 #include <errno.h>
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "controller_manager/controller_manager.hpp"
 #include "controller_manager/sleeping_policies.hpp"
