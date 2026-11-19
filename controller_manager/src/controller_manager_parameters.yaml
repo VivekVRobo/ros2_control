@@ -9,6 +9,17 @@ controller_manager:
     }
   }
 
+  introspection:
+    publish_every_n_cycles: {
+      type: int,
+      default_value: 1,
+      read_only: true,
+      description: "Number of controller manager real-time cycles between introspection publications. A value of 1 preserves the existing per-cycle publication behavior.",
+      validation: {
+        ge<>: 1,
+      }
+    }
+
   enforce_command_limits: {
     type: bool,
     default_value: true,
