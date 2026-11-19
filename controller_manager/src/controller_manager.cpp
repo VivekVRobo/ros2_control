@@ -733,6 +733,8 @@ void ControllerManager::initialize_parameters()
     params_ = std::make_shared<controller_manager::Params>(cm_param_listener_->get_params());
     overruns_print_warnings_.store(params_->overruns.print_warnings, std::memory_order_relaxed);
     update_rate_ = static_cast<unsigned int>(params_->update_rate);
+    introspection_publish_every_n_cycles_ =
+      static_cast<unsigned int>(params_->introspection.publish_every_n_cycles);
     trigger_clock_ =
       use_sim_time_ ? this->get_clock() : std::make_shared<rclcpp::Clock>(RCL_STEADY_TIME);
     RCLCPP_INFO(
@@ -3585,7 +3587,11 @@ controller_interface::return_type ControllerManager::update(
     }
   }
 
-  PUBLISH_ROS2_CONTROL_INTROSPECTION_DATA_ASYNC(hardware_interface::DEFAULT_REGISTRY_KEY);
+  if (++introspection_publish_counter_ >= introspection_publish_every_n_cycles_)
+  {
+    introspection_publish_counter_ = 0;
+    PUBLISH_ROS2_CONTROL_INTROSPECTION_DATA_ASYNC(hardware_interface::DEFAULT_REGISTRY_KEY);
+  }
 
   execution_time_.update_time =
     std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start_time)
@@ -3707,7 +3713,11 @@ void ControllerManager::write(const rclcpp::Time & time, const rclcpp::Duration 
     }
   }
 
-  PUBLISH_ROS2_CONTROL_INTROSPECTION_DATA_ASYNC(hardware_interface::CM_STATISTICS_KEY);
+  if (++introspection_publish_counter_ >= introspection_publish_every_n_cycles_)
+  {
+    introspection_publish_counter_ = 0;
+    PUBLISH_ROS2_CONTROL_INTROSPECTION_DATA_ASYNC(hardware_interface::CM_STATISTICS_KEY);
+  }
 }
 
 std::vector<ControllerSpec> &
