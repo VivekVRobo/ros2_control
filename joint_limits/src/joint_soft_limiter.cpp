@@ -183,21 +183,43 @@ bool JointSoftLimiter::on_enforce(
 
     if (hard_limits.has_velocity_limits && std::isfinite(prev_command_position))
     {
-      pos_low = std::clamp(prev_command_position + soft_min_vel * dt_seconds, pos_low, pos_high);
-      pos_high = std::clamp(prev_command_position + soft_max_vel * dt_seconds, pos_low, pos_high);
+      const double velocity_limited_pos_low =
+        prev_command_position + soft_min_vel * dt_seconds;
+      const double velocity_limited_pos_high =
+        prev_command_position + soft_max_vel * dt_seconds;
+
+      // Intersect the soft-position interval with the velocity-reachable interval.
+      // When a joint is already beyond a soft limit, these intervals can be disjoint.
+      // In that case, keep the velocity-reachable bound closest to the soft limit so the
+      // command moves back toward the soft limit without violating the hard velocity limit.
+      const double intersection_low = std::max(pos_low, velocity_limited_pos_low);
+      const double intersection_high = std::min(pos_high, velocity_limited_pos_high);
+
+      if (intersection_low <= intersection_high)
+      {
+        pos_low = intersection_low;
+        pos_high = intersection_high;
+      }
+      else if (velocity_limited_pos_high < pos_low)
+      {
+        pos_low = velocity_limited_pos_high;
+        pos_high = velocity_limited_pos_high;
+      }
+      else
+      {
+        pos_low = velocity_limited_pos_low;
+        pos_high = velocity_limited_pos_low;
+      }
     }
-    // Save the velocity-clamped bounds before intersecting with hard position limits.
-    // If the two ranges don't overlap (prev_command far outside soft limits), the soft-limit
-    // boundary from velocity clamping is used as the fallback so std::clamp always gets
-    // a valid [lo, hi] pair (lo <= hi). This fixes an assertion in GCC 15 libstdc++.
-    const double vel_clamped_pos_low = pos_low;
-    const double vel_clamped_pos_high = pos_high;
+
     pos_low = std::max(pos_low, position_limits.lower_limit);
     pos_high = std::min(pos_high, position_limits.upper_limit);
     if (pos_low > pos_high)
     {
-      pos_low = vel_clamped_pos_low;
-      pos_high = vel_clamped_pos_high;
+      // The velocity-reachable interval can itself be outside the hard position limits.
+      // In that case, use the closest hard-limit boundary.
+      pos_low = std::clamp(pos_low, position_limits.lower_limit, position_limits.upper_limit);
+      pos_high = pos_low;
     }
 
     limits_enforced = is_limited(desired.position.value(), pos_low, pos_high);
