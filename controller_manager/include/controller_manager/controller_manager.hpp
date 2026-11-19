@@ -341,7 +341,8 @@ protected:
   // Per controller update rate support
   unsigned int update_loop_counter_ = 0;
   unsigned int update_rate_;
-  unsigned int introspection_publish_counter_ = 0;
+  unsigned int default_introspection_publish_counter_ = 0;
+  unsigned int cm_introspection_publish_counter_ = 0;
   unsigned int introspection_publish_every_n_cycles_ = 1;
   std::vector<std::vector<std::string>> chained_controllers_configuration_;
 
