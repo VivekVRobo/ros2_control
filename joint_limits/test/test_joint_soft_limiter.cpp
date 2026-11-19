@@ -52,6 +52,47 @@ TEST_F(JointSoftLimiterTest, when_invalid_dt_expect_enforce_fail)
   ASSERT_FALSE(joint_limiter_->enforce(actual_state_, desired_state_, period));
 }
 
+TEST_F(JointSoftLimiterTest, position_beyond_soft_limit_respects_velocity_limit)
+{
+  SetupNode("soft_joint_limiter");
+  ASSERT_TRUE(Load());
+
+  joint_limits::JointLimits limits;
+  limits.has_position_limits = true;
+  limits.min_position = -1.57;
+  limits.max_position = 1.57;
+  limits.has_velocity_limits = true;
+  limits.max_velocity = 1.0;
+
+  joint_limits::SoftJointLimits soft_limits;
+  soft_limits.min_position = -1.40;
+  soft_limits.max_position = 1.40;
+  soft_limits.k_position = 10.0;
+
+  ASSERT_TRUE(Init(limits, soft_limits));
+  ASSERT_TRUE(Configure());
+
+  rclcpp::Duration period = rclcpp::Duration::from_seconds(0.01);
+
+  // The joint is already beyond the positive soft limit. The command must move toward
+  // the soft limit, but no farther than the hard velocity limit permits in this cycle.
+  actual_state_ = {};
+  desired_state_ = {};
+  actual_state_.position = 1.45;
+  desired_state_.position = 1.45;
+  ASSERT_TRUE(joint_limiter_->enforce(actual_state_, desired_state_, period));
+  EXPECT_NEAR(desired_state_.position.value(), 1.44, COMMON_THRESHOLD);
+
+  // The same invariant must hold on the negative side.
+  ASSERT_TRUE(Init(limits, soft_limits));
+  actual_state_ = {};
+  desired_state_ = {};
+  actual_state_.position = -1.45;
+  desired_state_.position = -1.45;
+  ASSERT_TRUE(joint_limiter_->enforce(actual_state_, desired_state_, period));
+  EXPECT_NEAR(desired_state_.position.value(), -1.44, COMMON_THRESHOLD);
+}
+
 TEST_F(JointSoftLimiterTest, check_desired_position_only_cases)
 {
   SetupNode("soft_joint_limiter");
