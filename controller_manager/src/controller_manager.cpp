@@ -3587,9 +3587,9 @@ controller_interface::return_type ControllerManager::update(
     }
   }
 
-  if (++introspection_publish_counter_ >= introspection_publish_every_n_cycles_)
+  if (++default_introspection_publish_counter_ >= introspection_publish_every_n_cycles_)
   {
-    introspection_publish_counter_ = 0;
+    default_introspection_publish_counter_ = 0;
     PUBLISH_ROS2_CONTROL_INTROSPECTION_DATA_ASYNC(hardware_interface::DEFAULT_REGISTRY_KEY);
   }
 
@@ -3713,9 +3713,9 @@ void ControllerManager::write(const rclcpp::Time & time, const rclcpp::Duration 
     }
   }
 
-  if (++introspection_publish_counter_ >= introspection_publish_every_n_cycles_)
+  if (++cm_introspection_publish_counter_ >= introspection_publish_every_n_cycles_)
   {
-    introspection_publish_counter_ = 0;
+    cm_introspection_publish_counter_ = 0;
     PUBLISH_ROS2_CONTROL_INTROSPECTION_DATA_ASYNC(hardware_interface::CM_STATISTICS_KEY);
   }
 }
