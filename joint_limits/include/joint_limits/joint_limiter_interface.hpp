@@ -134,6 +134,17 @@ public:
 
   /**
    * @brief Initialize joints from directly provided names and limits.
+   *
+   * Initializes the limiter with the supplied hard and soft joint limits instead of
+   * reading limit parameters from the node.
+   *
+   * @param[in] joint_names names of joints where limits should be applied.
+   * @param[in] joint_limits hard joint limits for the joints.
+   * @param[in] soft_joint_limits soft joint limits for the joints.
+   * @param[in] param_itf node parameters interface object to access parameters.
+   * @param[in] logging_itf node logging interface to log if an error happens.
+   * @return true if the number of joint names matches the number of hard limits and
+   *   implementation-specific initialization succeeds, otherwise false.
    */
   virtual bool init(
     const std::vector<std::string> & joint_names,
