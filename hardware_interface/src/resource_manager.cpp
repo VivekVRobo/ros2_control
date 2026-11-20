@@ -925,12 +925,32 @@ public:
   {
     joint_limits::JointInterfacesCommandLimiterData & data = limiters_data_[joint_name];
     update_joint_limiters_data(data);
-    const bool enforce_result = limiter.enforce(data.actual, data.limited, period);
-    if (enforce_result)
+    try
     {
-      update_joint_limiters_commands(data.limited, command_interface_map_);
+      const bool enforce_result = limiter.enforce(data.actual, data.limited, period);
+      if (enforce_result)
+      {
+        update_joint_limiters_commands(data.limited, command_interface_map_);
+      }
+      return enforce_result;
     }
-    return enforce_result;
+    catch (const std::runtime_error & ex)
+    {
+      // Keep the realtime update loop alive when the limiter rejects an out-of-bounds actual
+      // position. Holding the command at the measured position avoids continuing to send the
+      // stale command that triggered the failure.
+      RCLCPP_ERROR_THROTTLE(
+        get_logger(), *rm_clock_, 1000,
+        "Joint '%s' command limit enforcement failed: %s. Holding position command at the "
+        "measured position.",
+        joint_name.c_str(), ex.what());
+      if (data.actual.position.has_value())
+      {
+        data.limited.position = data.actual.position;
+        update_joint_limiters_commands(data.limited, command_interface_map_);
+      }
+      return false;
+    }
   }
 
   std::string add_state_interface(StateInterface::ConstSharedPtr interface)
