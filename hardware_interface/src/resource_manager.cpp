@@ -2389,7 +2389,24 @@ bool ResourceManager::enforce_command_limits(const rclcpp::Duration & period)
   {
     for (const auto & [joint_name, limiter] : limiters)
     {
-      enforce_result |= resource_storage_->enforce_command_limits(joint_name, period);
+      try
+      {
+        enforce_result |= resource_storage_->enforce_command_limits(joint_name, period);
+      }
+      catch (const std::exception & e)
+      {
+        RCLCPP_ERROR(
+          get_logger(),
+          "Failed to enforce command limits for joint '%s': %s",
+          joint_name.c_str(), e.what());
+      }
+      catch (...)
+      {
+        RCLCPP_ERROR(
+          get_logger(),
+          "Failed to enforce command limits for joint '%s': unknown exception",
+          joint_name.c_str());
+      }
     }
   }
   return enforce_result;
