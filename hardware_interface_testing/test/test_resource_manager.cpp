@@ -3049,6 +3049,22 @@ TEST_F(ResourceManagerTest, async_hardware_no_pure_virtual_call_on_destroy)
   EXPECT_NO_FATAL_FAILURE(rm.reset());
 }
 
+TEST_F(
+  ResourceManagerTestCommandLimitEnforcement,
+  enforce_command_limits_does_not_throw_if_position_is_out_of_bounds)
+{
+  setup_resource_manager_and_do_initial_checks();
+
+  ASSERT_TRUE(claimed_itfs[0].set_value(1000.0));
+
+  auto [read_result, failed_hardware_names] = rm->read(time, duration);
+  ASSERT_EQ(read_result, hardware_interface::return_type::OK);
+  ASSERT_TRUE(failed_hardware_names.empty());
+  ASSERT_GT(state_itfs[2].get_optional().value(), M_PI + 0.01);
+
+  EXPECT_NO_THROW(rm->enforce_command_limits(duration));
+}
+
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
