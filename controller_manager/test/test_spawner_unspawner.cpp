@@ -718,6 +718,60 @@ TEST_F(TestLoadController, unload_on_kill_with_sigterm)
   ASSERT_EQ(cm_->get_loaded_controllers().size(), 0ul);
 }
 
+TEST_F(TestLoadController, unload_on_kill_with_repeated_sigint)
+{
+  // Repeated Ctrl-C signals must not interrupt cleanup and leave the controller loaded.
+  ControllerManagerRunner cm_runner(this);
+  cm_->set_parameter(rclcpp::Parameter("ctrl_3.type", test_controller::TEST_CONTROLLER_CLASS_NAME));
+  const std::string spawner_cmd =
+    "timeout --signal=KILL 30 " + std::string(coveragepy_script) +
+    " $(ros2 pkg prefix controller_manager)/lib/controller_manager/spawner "
+    "ctrl_3 -c test_controller_manager --unload-on-kill";
+  auto spawner_future =
+    std::async(std::launch::async, [spawner_cmd]() { return std::system(spawner_cmd.c_str()); });
+
+  auto is_ctrl_3_active = [this]()
+  {
+    for (const auto & ctrl : cm_->get_loaded_controllers())
+    {
+      if (ctrl.info.name == "ctrl_3")
+      {
+        return ctrl.c->get_lifecycle_state().id() ==
+               lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE;
+      }
+    }
+    return false;
+  };
+  const auto wait_start = std::chrono::steady_clock::now();
+  while (!is_ctrl_3_active())
+  {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    ASSERT_LT(std::chrono::steady_clock::now() - wait_start, std::chrono::seconds(10))
+      << "Timed out waiting for ctrl_3 to become active";
+  }
+
+  // Give the spawner time to enter its interrupt wait loop before sending the burst.
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  EXPECT_EQ(
+    std::system(
+      "pid=$(pgrep -o -f '^python3 -m coverage run .*controller_manager/[s]pawner ctrl_3 ') && "
+      "test -n \"$pid\" && { for i in $(seq 1 50); do kill -INT $pid 2>/dev/null; done; true; }"),
+    0)
+    << "Failed to find the spawner process to interrupt";
+
+  spawner_future.get();
+
+  // Controller cleanup is asynchronous after the signal handler returns. Poll briefly so the
+  // assertion checks the completed cleanup rather than scheduler timing.
+  const auto cleanup_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  while (cm_->get_loaded_controllers().size() != 0 &&
+         std::chrono::steady_clock::now() < cleanup_deadline)
+  {
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  ASSERT_EQ(cm_->get_loaded_controllers().size(), 0ul);
+}
+
 TEST_F(TestLoadController, spawner_test_to_check_parameter_overriding)
 {
   const std::string main_test_file_path =
