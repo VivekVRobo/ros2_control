@@ -24,7 +24,7 @@ from launch_ros.substitutions import FindPackageShare
 
 import rclpy
 
-from controller_manager.test_utils import check_controllers_running
+from controller_manager_testing.test_utils import check_controllers_running
 
 from controller_manager.launch_utils import generate_controllers_spawner_launch_description
 
