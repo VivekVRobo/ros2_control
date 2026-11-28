@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 #include "sensor_msgs/msg/magnetic_field.hpp"
@@ -42,7 +43,7 @@ TEST_F(MagneticFieldSensorTest, validate_all)
   ASSERT_EQ(magnetic_field_sensor_->interface_names_.size(), size_);
   ASSERT_EQ(magnetic_field_sensor_->state_interfaces_.capacity(), size_);
 
-  // Validate the default interface_names_
+  // Validate the default interface_names
   ASSERT_TRUE(
     std::equal(
       magnetic_field_sensor_->interface_names_.begin(),
@@ -75,15 +76,44 @@ TEST_F(MagneticFieldSensorTest, validate_all)
   // Now call the function to make them in order like interface_names
   magnetic_field_sensor_->assign_loaned_state_interfaces(temp_state_interfaces);
 
-  // Validate the count of state_interfaces_
+  // Validate the count of state_interfaces
   ASSERT_EQ(magnetic_field_sensor_->state_interfaces_.size(), size_);
 
-  // Validate get_values_as_message()
   sensor_msgs::msg::MagneticField temp_message;
+
+  // Simulate all state reads being unavailable. The sensor must not report the
+  // zero-initialized or stale cache as a current measurement.
+  {
+    std::unique_lock<std::shared_mutex> x_lock(magnetic_field_x->get_mutex());
+    std::unique_lock<std::shared_mutex> y_lock(magnetic_field_y->get_mutex());
+    std::unique_lock<std::shared_mutex> z_lock(magnetic_field_z->get_mutex());
+
+    ASSERT_TRUE(magnetic_field_sensor_->get_values_as_message(temp_message));
+    ASSERT_TRUE(std::isnan(temp_message.magnetic_field.x));
+    ASSERT_TRUE(std::isnan(temp_message.magnetic_field.y));
+    ASSERT_TRUE(std::isnan(temp_message.magnetic_field.z));
+  }
+
+  // Validate a partial read. An unavailable axis must not be mixed with a
+  // previous sample while the other axes report the current sample.
+  std::ignore = magnetic_field_x->set_value(10.0);
+  std::ignore = magnetic_field_y->set_value(20.0);
+  std::ignore = magnetic_field_z->set_value(30.0);
+
+  {
+    std::unique_lock<std::shared_mutex> y_lock(magnetic_field_y->get_mutex());
+
+    ASSERT_TRUE(magnetic_field_sensor_->get_values_as_message(temp_message));
+    ASSERT_DOUBLE_EQ(temp_message.magnetic_field.x, 10.0);
+    ASSERT_TRUE(std::isnan(temp_message.magnetic_field.y));
+    ASSERT_DOUBLE_EQ(temp_message.magnetic_field.z, 30.0);
+  }
+
+  // Validate a complete read after the unavailable sample.
   ASSERT_TRUE(magnetic_field_sensor_->get_values_as_message(temp_message));
-  ASSERT_EQ(temp_message.magnetic_field.x, magnetic_field_values_[0]);
-  ASSERT_EQ(temp_message.magnetic_field.y, magnetic_field_values_[1]);
-  ASSERT_EQ(temp_message.magnetic_field.z, magnetic_field_values_[2]);
+  ASSERT_DOUBLE_EQ(temp_message.magnetic_field.x, 10.0);
+  ASSERT_DOUBLE_EQ(temp_message.magnetic_field.y, 20.0);
+  ASSERT_DOUBLE_EQ(temp_message.magnetic_field.z, 30.0);
 
   // release the state_interfaces
   magnetic_field_sensor_->release_interfaces();
