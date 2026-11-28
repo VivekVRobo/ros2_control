@@ -40,7 +40,7 @@ import launch_ros.actions
 from launch_ros.substitutions import FindPackagePrefix, FindPackageShare
 
 import rclpy
-from controller_manager.test_utils import (
+from controller_manager_testing.test_utils import (
     check_controllers_running,
     check_node_running,
 )
