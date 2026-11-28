@@ -32,7 +32,7 @@ import unittest
 from sensor_msgs.msg import JointState
 
 import rclpy
-from controller_manager.test_utils import (
+from controller_manager_testing.test_utils import (
     check_if_js_published,
 )
 import threading
